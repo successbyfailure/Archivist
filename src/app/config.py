@@ -20,6 +20,7 @@ class Settings(BaseSettings):
     vhs_endpoint: str | None = None
     vhs_api_key: str | None = None
     metrics_window: int = 1000
+    max_upload_mb: int = 20
 
 
 @lru_cache()
