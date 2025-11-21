@@ -1,32 +1,6 @@
+from datetime import datetime
 from typing import Dict, List, Optional
 from pydantic import BaseModel, Field
-
-
-class IngestionRequest(BaseModel):
-    collection: str
-    namespace: Optional[str] = None
-    metadata: Dict[str, str] = Field(default_factory=dict)
-    chunk_size: Optional[int] = None
-    chunk_overlap: Optional[int] = None
-
-
-class URLIngestionRequest(IngestionRequest):
-    url: str
-
-
-class GitIngestionRequest(IngestionRequest):
-    repo_url: str
-    branch: Optional[str] = None
-    path: Optional[str] = None
-
-
-class APIIngestionRequest(IngestionRequest):
-    endpoint: str
-    headers: Dict[str, str] = Field(default_factory=dict)
-
-
-class WebhookEvent(IngestionRequest):
-    payload: Dict[str, str] = Field(default_factory=dict)
 
 
 class QueryRequest(BaseModel):
@@ -61,3 +35,23 @@ class ReplayRequest(BaseModel):
     query: str
     namespace: Optional[str] = None
     collection: Optional[str] = None
+
+
+class CollectionSummary(BaseModel):
+    namespace: str
+    collection: str
+    documents: int
+    chunks: int
+    latest_version: int
+    languages: List[str] = Field(default_factory=list)
+    latest_ingested_at: Optional[datetime] = None
+
+
+class DocumentPreview(BaseModel):
+    id: str
+    version: int
+    metadata: Dict[str, str] = Field(default_factory=dict)
+    created_at: datetime
+    chunks: int
+    snippet: str
+    language: Optional[str] = None
