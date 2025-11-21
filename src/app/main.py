@@ -1,4 +1,5 @@
 import asyncio
+import mimetypes
 import time
 from pathlib import Path
 from typing import Dict, List
@@ -9,6 +10,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 
 from .config import get_settings
+from .ingestion.loaders import UnsupportedFile
 from .ingestion.pipelines import IngestionPipeline
 from .metrics import MetricsRecorder
 from .pipelines.dspy import PipelineRegistry
@@ -73,16 +75,25 @@ async def ingest_file(
     parsed_chunk_size = parse_optional_int(chunk_size, "chunk_size")
     parsed_chunk_overlap = parse_optional_int(chunk_overlap, "chunk_overlap")
     content = await file.read()
-    doc = ingestion_pipeline.ingest_file(
-        file_name=file.filename,
-        content=content,
-        content_type=file.content_type or "text/plain",
-        namespace=get_namespace(namespace),
-        collection=collection,
-        metadata=meta_dict,
-        chunk_size=parsed_chunk_size,
-        chunk_overlap=parsed_chunk_overlap,
-    )
+    fallback_type, _ = mimetypes.guess_type(file.filename or "")
+    content_type = file.content_type or fallback_type or "application/octet-stream"
+
+    try:
+        doc = ingestion_pipeline.ingest_file(
+            file_name=file.filename,
+            content=content,
+            content_type=content_type,
+            namespace=get_namespace(namespace),
+            collection=collection,
+            metadata=meta_dict,
+            chunk_size=parsed_chunk_size,
+            chunk_overlap=parsed_chunk_overlap,
+        )
+    except UnsupportedFile as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception as exc:  # pragma: no cover - surfaced as 500 otherwise
+        raise HTTPException(status_code=500, detail=f"Error ingesting file: {exc}") from exc
+
     return {"document_id": doc.id, "version": doc.version}
 
 
