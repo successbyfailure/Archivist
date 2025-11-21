@@ -1,9 +1,12 @@
 services:
   archivist:
+    image: ghcr.io/successbyfailure/archivist:latest
     build:
       context: .
       dockerfile: Dockerfile
     container_name: archivist
+    labels:
+      com.centurylinklabs.watchtower.enable: "true"
     ports:
       - "8000:8000"
     env_file:
@@ -13,4 +16,14 @@ services:
       - ./data:/data
       - ./logs:/logs
     command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+    restart: unless-stopped
+
+  watchtower:
+    image: containrrr/watchtower
+    container_name: watchtower
+    environment:
+      WATCHTOWER_LABEL_ENABLE: "true"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    command: ["--interval", "60", "archivist"]
     restart: unless-stopped
