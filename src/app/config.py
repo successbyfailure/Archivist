@@ -13,6 +13,9 @@ class Settings(BaseSettings):
     chunk_size: int = 800
     chunk_overlap: int = 100
     llm_backends: List[str] = Field(default_factory=lambda: ["openai", "anthropic", "local"])
+    openai_api_key: str | None = None
+    openai_api_base: str = "https://api.openai.com/v1"
+    openai_text_model: str = "gpt-4o-mini"
     enable_vhs: bool = True
     metrics_window: int = 1000
 

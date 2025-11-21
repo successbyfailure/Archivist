@@ -24,3 +24,5 @@ docker compose up -d
 ```
 
 Variables de entorno opcionales pueden declararse en un archivo `.env` en la raíz del proyecto. El archivo `example.env` incluido ofrece valores predeterminados; puedes copiarlo a `.env` y ajustarlo según sea necesario. Los volúmenes `./data` y `./logs` se montan para persistir los índices y los registros. El servicio quedará accesible en `http://localhost:8000` con la documentación interactiva en `http://localhost:8000/docs` y el panel ligero en `http://localhost:8000/ui`.
+
+Para conectar con un endpoint compatible con OpenAI establece `ARCHIVIST_OPENAI_API_KEY` y, si corresponde, `ARCHIVIST_OPENAI_API_BASE` y `ARCHIVIST_OPENAI_TEXT_MODEL` para elegir el modelo de texto. Estas variables respetan el prefijo `ARCHIVIST_` usado por la configuración y pueden declararse en `.env` o en tu entorno de despliegue.

@@ -49,6 +49,15 @@ def get_namespace(namespace: str | None) -> str:
     return namespace or settings.default_namespace
 
 
+def parse_optional_int(value: str | None, field: str) -> int | None:
+    if value is None or value == "":
+        return None
+    try:
+        return int(value)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=f"{field} must be an integer") from exc
+
+
 @app.get("/", response_class=HTMLResponse)
 async def root():
     return (ui_path / "index.html").read_text()
@@ -59,11 +68,13 @@ async def ingest_file(
     collection: str = Form(...),
     namespace: str | None = Form(None),
     metadata: str | None = Form(None),
-    chunk_size: int | None = Form(None),
-    chunk_overlap: int | None = Form(None),
+    chunk_size: str | None = Form(None),
+    chunk_overlap: str | None = Form(None),
     file: UploadFile = File(...),
 ):
     meta_dict = {} if not metadata else {"user": metadata}
+    parsed_chunk_size = parse_optional_int(chunk_size, "chunk_size")
+    parsed_chunk_overlap = parse_optional_int(chunk_overlap, "chunk_overlap")
     content = await file.read()
     doc = ingestion_pipeline.ingest_file(
         file_name=file.filename,
@@ -72,8 +83,8 @@ async def ingest_file(
         namespace=get_namespace(namespace),
         collection=collection,
         metadata=meta_dict,
-        chunk_size=chunk_size,
-        chunk_overlap=chunk_overlap,
+        chunk_size=parsed_chunk_size,
+        chunk_overlap=parsed_chunk_overlap,
     )
     return {"document_id": doc.id, "version": doc.version}
 
