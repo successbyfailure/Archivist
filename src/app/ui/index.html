@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Archivist RAG UI</title>
+    <style>
+        body { font-family: Arial, sans-serif; padding: 20px; }
+        .section { margin-bottom: 24px; padding: 12px; border: 1px solid #ccc; }
+        label { display: block; margin-top: 8px; }
+        textarea { width: 100%; height: 120px; }
+    </style>
+</head>
+<body>
+<h1>Archivist RAG</h1>
+<div class="section">
+    <h2>Upload</h2>
+    <form id="upload-form">
+        <label>Collection <input name="collection" required></label>
+        <label>Namespace <input name="namespace"></label>
+        <label>File <input type="file" name="file" required></label>
+        <button type="submit">Upload</button>
+    </form>
+    <pre id="upload-result"></pre>
+</div>
+<div class="section">
+    <h2>Query</h2>
+    <form id="query-form">
+        <label>Query <input name="query" required></label>
+        <label>Collection <input name="collection" value="default"></label>
+        <label>Namespace <input name="namespace"></label>
+        <label>Pipeline <input name="pipeline" placeholder="qa"></label>
+        <label><input type="checkbox" name="retrieval_only"> Retrieval only</label>
+        <button type="submit">Search</button>
+    </form>
+    <pre id="query-result"></pre>
+</div>
+<script>
+const uploadForm = document.getElementById('upload-form');
+uploadForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const formData = new FormData(uploadForm);
+    const res = await fetch('/ingest/file', {method: 'POST', body: formData});
+    document.getElementById('upload-result').innerText = await res.text();
+});
+
+const queryForm = document.getElementById('query-form');
+queryForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const formData = new FormData(queryForm);
+    const payload = Object.fromEntries(formData.entries());
+    payload.retrieval_only = formData.get('retrieval_only') === 'on';
+    const res = await fetch('/rag/query', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(payload)});
+    document.getElementById('query-result').innerText = await res.text();
+});
+</script>
+</body>
+</html>

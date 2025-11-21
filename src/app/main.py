@@ -1,0 +1,225 @@
+import asyncio
+import time
+from pathlib import Path
+from typing import Dict, List
+
+from fastapi import Depends, FastAPI, File, Form, HTTPException, UploadFile
+from fastapi.responses import HTMLResponse, StreamingResponse
+from fastapi.staticfiles import StaticFiles
+from fastapi.middleware.cors import CORSMiddleware
+
+from .config import get_settings
+from .ingestion.pipelines import IngestionPipeline
+from .metrics import MetricsRecorder
+from .pipelines.dspy import PipelineRegistry
+from .schemas import (
+    APIIngestionRequest,
+    ChatRequest,
+    GitIngestionRequest,
+    IngestionRequest,
+    PipelineConfig,
+    QueryRequest,
+    ReplayRequest,
+    URLIngestionRequest,
+    WebhookEvent,
+)
+from .vectorstore.store import VectorStore
+
+
+app = FastAPI(title="Archivist RAG Service", version="0.1.0")
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+store = VectorStore()
+ingestion_pipeline = IngestionPipeline(store)
+metrics = MetricsRecorder(store)
+pipelines = PipelineRegistry()
+
+ui_path = Path(__file__).parent / "ui"
+app.mount("/ui", StaticFiles(directory=ui_path), name="ui")
+
+
+def get_namespace(namespace: str | None) -> str:
+    settings = get_settings()
+    return namespace or settings.default_namespace
+
+
+@app.get("/", response_class=HTMLResponse)
+async def root():
+    return (ui_path / "index.html").read_text()
+
+
+@app.post("/ingest/file")
+async def ingest_file(
+    collection: str = Form(...),
+    namespace: str | None = Form(None),
+    metadata: str | None = Form(None),
+    chunk_size: int | None = Form(None),
+    chunk_overlap: int | None = Form(None),
+    file: UploadFile = File(...),
+):
+    meta_dict = {} if not metadata else {"user": metadata}
+    content = await file.read()
+    doc = ingestion_pipeline.ingest_file(
+        file_name=file.filename,
+        content=content,
+        content_type=file.content_type or "text/plain",
+        namespace=get_namespace(namespace),
+        collection=collection,
+        metadata=meta_dict,
+        chunk_size=chunk_size,
+        chunk_overlap=chunk_overlap,
+    )
+    return {"document_id": doc.id, "version": doc.version}
+
+
+@app.post("/ingest/url")
+async def ingest_url(request: URLIngestionRequest):
+    doc = ingestion_pipeline.ingest_url(
+        url=request.url,
+        namespace=get_namespace(request.namespace),
+        collection=request.collection,
+        metadata=request.metadata,
+        chunk_size=request.chunk_size,
+        chunk_overlap=request.chunk_overlap,
+    )
+    return doc
+
+
+@app.post("/ingest/git")
+async def ingest_git(request: GitIngestionRequest):
+    docs = ingestion_pipeline.ingest_git(
+        repo_url=request.repo_url,
+        namespace=get_namespace(request.namespace),
+        collection=request.collection,
+        metadata=request.metadata,
+        branch=request.branch,
+        path=request.path,
+    )
+    return {"documents": [d.id for d in docs]}
+
+
+@app.post("/ingest/api")
+async def ingest_api(request: APIIngestionRequest):
+    doc = ingestion_pipeline.ingest_api(
+        endpoint=request.endpoint,
+        namespace=get_namespace(request.namespace),
+        collection=request.collection,
+        metadata=request.metadata,
+        headers=request.headers,
+    )
+    return doc
+
+
+@app.post("/ingest/webhook")
+async def ingest_webhook(request: WebhookEvent):
+    doc = ingestion_pipeline.ingest_webhook(
+        payload=request.payload,
+        namespace=get_namespace(request.namespace),
+        collection=request.collection,
+        metadata=request.metadata,
+    )
+    return doc
+
+
+@app.post("/ingest/vhs")
+async def ingest_vhs(transcript: str = Form(...), collection: str = Form(...), namespace: str | None = Form(None)):
+    doc = ingestion_pipeline.ingest_video_transcript(
+        transcript=transcript,
+        namespace=get_namespace(namespace),
+        collection=collection,
+        metadata={"source": "vhs"},
+    )
+    return doc
+
+
+def _execute_pipeline(request: QueryRequest) -> Dict[str, object]:
+    namespace = get_namespace(request.namespace)
+    start = time.time()
+    chunks = store.search(
+        namespace=namespace,
+        collection=request.collection or "default",
+        query=request.query,
+        filters=request.filters,
+    )
+    pipeline = pipelines.get(request.pipeline)
+    answer = "" if request.retrieval_only else pipeline.run(
+        request.query, chunks, structured=request.structured, partial=request.partial
+    )
+    metrics.record(request.query, namespace, request.collection or "default", tokens=len(request.query.split()), start_time=start)
+    return {"answer": answer, "chunks": chunks}
+
+
+async def _streaming_response(result: Dict[str, object]):
+    answer: str = result["answer"]
+    for token in answer.split():
+        yield token + " "
+        await asyncio.sleep(0.01)
+
+
+@app.post("/rag/query")
+async def rag_query(request: QueryRequest):
+    result = _execute_pipeline(request)
+    if request.stream:
+        return StreamingResponse(_streaming_response(result), media_type="text/plain")
+    return result
+
+
+@app.post("/rag/chat")
+async def rag_chat(request: ChatRequest):
+    combined = " ".join([m.content for m in request.history]) + " " + request.query
+    chat_request = QueryRequest(**request.dict(), query=combined)
+    result = _execute_pipeline(chat_request)
+    if request.stream:
+        return StreamingResponse(_streaming_response(result), media_type="text/plain")
+    return result
+
+
+@app.get("/pipelines")
+async def list_pipelines() -> List[PipelineConfig]:
+    return [PipelineConfig(name=name, description=p.description, optimized=p.optimized) for name, p in pipelines.pipelines.items()]
+
+
+@app.post("/pipelines/{name}/optimize")
+async def optimize_pipeline(name: str, feedback: Dict[str, str]):
+    pipelines.optimize(name, feedback)
+    return {"status": "optimized"}
+
+
+@app.get("/admin/stats")
+async def admin_stats():
+    snapshot = metrics.snapshot()
+    snapshot["latest_queries"] = store.latest_queries()
+    return snapshot
+
+
+@app.post("/admin/replay")
+async def admin_replay(request: ReplayRequest):
+    namespace = get_namespace(request.namespace)
+    chunks = store.search(
+        namespace=namespace,
+        collection=request.collection or "default",
+        query=request.query,
+    )
+    return {
+        "query": request.query,
+        "chunks": [
+            {
+                "id": c.id,
+                "score": c.score,
+                "text": c.text,
+                "metadata": c.metadata,
+            }
+            for c in chunks
+        ],
+    }
+
+
+@app.get("/health")
+async def health():
+    return {"status": "ok"}
