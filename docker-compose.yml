@@ -1,0 +1,22 @@
+version: '3.9'
+services:
+  archivist:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: archivist
+    ports:
+      - "8000:8000"
+    environment:
+      - ARCHIVIST_DEFAULT_NAMESPACE=default
+      - ARCHIVIST_CHUNK_SIZE=800
+      - ARCHIVIST_CHUNK_OVERLAP=100
+      - ARCHIVIST_VECTOR_DIM=384
+      - ARCHIVIST_ENABLE_STREAMING=true
+    env_file:
+      - .env
+    volumes:
+      - ./data:/data
+      - ./logs:/logs
+    command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+    restart: unless-stopped

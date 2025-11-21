@@ -1,0 +1,10 @@
+fastapi
+uvicorn
+python-multipart
+langdetect
+markdown2
+beautifulsoup4
+requests
+pdfminer.six
+python-docx
+numpy
