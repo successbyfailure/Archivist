@@ -1,9 +1,13 @@
 from functools import lru_cache
-from pydantic import BaseSettings, Field
 from typing import List
+
+from pydantic import Field
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
+    model_config = SettingsConfigDict(env_prefix="ARCHIVIST_")
+
     app_name: str = "Archivist RAG Service"
     default_namespace: str = "default"
     chunk_size: int = 800
@@ -11,9 +15,6 @@ class Settings(BaseSettings):
     llm_backends: List[str] = Field(default_factory=lambda: ["openai", "anthropic", "local"])
     enable_vhs: bool = True
     metrics_window: int = 1000
-
-    class Config:
-        env_prefix = "ARCHIVIST_"
 
 
 @lru_cache()
