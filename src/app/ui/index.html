@@ -4,53 +4,299 @@
     <meta charset="UTF-8">
     <title>Archivist RAG UI</title>
     <style>
-        body { font-family: Arial, sans-serif; padding: 20px; }
-        .section { margin-bottom: 24px; padding: 12px; border: 1px solid #ccc; }
-        label { display: block; margin-top: 8px; }
-        textarea { width: 100%; height: 120px; }
+        body { font-family: Arial, sans-serif; padding: 20px; background: #f7f7f9; }
+        h1 { margin-top: 0; }
+        .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 16px; }
+        .section { background: #fff; margin-bottom: 16px; padding: 16px; border: 1px solid #dcdce6; border-radius: 8px; box-shadow: 0 1px 2px rgba(0,0,0,0.04); }
+        .section h2 { margin-top: 0; }
+        label { display: block; margin-top: 8px; font-weight: bold; }
+        label span { font-weight: normal; color: #555; }
+        input, textarea, button { width: 100%; box-sizing: border-box; }
+        input, textarea { margin-top: 4px; padding: 8px; border: 1px solid #ccc; border-radius: 4px; }
+        textarea { height: 140px; resize: vertical; }
+        button { margin-top: 12px; padding: 10px; background: #4f46e5; color: #fff; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; }
+        button.secondary { background: #0ea5e9; }
+        button:disabled { opacity: 0.6; cursor: not-allowed; }
+        .result { margin-top: 12px; background: #0f172a; color: #e2e8f0; padding: 12px; border-radius: 6px; white-space: pre-wrap; font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace; }
+        .stacked > * + * { margin-top: 8px; }
+        .pill { display: inline-block; padding: 2px 8px; border-radius: 9999px; background: #e0f2fe; color: #0369a1; font-size: 12px; font-weight: bold; margin-right: 8px; }
     </style>
 </head>
 <body>
 <h1>Archivist RAG</h1>
-<div class="section">
-    <h2>Upload</h2>
-    <form id="upload-form">
-        <label>Collection <input name="collection" required></label>
-        <label>Namespace <input name="namespace"></label>
-        <label>File <input type="file" name="file" required></label>
-        <button type="submit">Upload</button>
-    </form>
-    <pre id="upload-result"></pre>
+<div class="grid">
+    <div class="section">
+        <h2>Subir archivo</h2>
+        <form id="upload-form" class="stacked">
+            <label>Collection <input name="collection" placeholder="default" required></label>
+            <label>Namespace <input name="namespace" placeholder="(opcional)"></label>
+            <label>File <input type="file" name="file" required></label>
+            <label>Metadata <input name="metadata" placeholder="valor libre" ></label>
+            <label>Chunk size <input type="number" name="chunk_size" min="10" step="10" placeholder="usa el valor por defecto"></label>
+            <label>Chunk overlap <input type="number" name="chunk_overlap" min="0" step="5" placeholder="usa el valor por defecto"></label>
+            <button type="submit">Upload</button>
+        </form>
+        <div id="upload-result" class="result"></div>
+    </div>
+
+    <div class="section">
+        <h2>Ingestar URL</h2>
+        <form id="url-form" class="stacked">
+            <label>URL <input name="url" required placeholder="https://..."></label>
+            <label>Collection <input name="collection" placeholder="default" required></label>
+            <label>Namespace <input name="namespace" placeholder="(opcional)"></label>
+            <label>Metadata (JSON) <textarea name="metadata" placeholder='{ "source": "blog" }'></textarea></label>
+            <button type="submit">Fetch & Ingest</button>
+        </form>
+        <div id="url-result" class="result"></div>
+    </div>
+
+    <div class="section">
+        <h2>Repositorio Git</h2>
+        <form id="git-form" class="stacked">
+            <label>Repo URL <input name="repo_url" required placeholder="https://github.com/..."></label>
+            <label>Branch <input name="branch" placeholder="main"></label>
+            <label>Subpath <input name="path" placeholder="src"></label>
+            <label>Collection <input name="collection" placeholder="default" required></label>
+            <label>Namespace <input name="namespace" placeholder="(opcional)"></label>
+            <label>Metadata (JSON) <textarea name="metadata" placeholder='{ "tag": "import" }'></textarea></label>
+            <button type="submit">Clonar e indexar</button>
+        </form>
+        <div id="git-result" class="result"></div>
+    </div>
+
+    <div class="section">
+        <h2>Endpoint API</h2>
+        <form id="api-form" class="stacked">
+            <label>Endpoint <input name="endpoint" required placeholder="https://api.example.com/data"></label>
+            <label>Headers (JSON) <textarea name="headers" placeholder='{ "Authorization": "Bearer ..." }'></textarea></label>
+            <label>Collection <input name="collection" placeholder="default" required></label>
+            <label>Namespace <input name="namespace" placeholder="(opcional)"></label>
+            <label>Metadata (JSON) <textarea name="metadata" placeholder='{ "source": "api" }'></textarea></label>
+            <button type="submit">Descargar e indexar</button>
+        </form>
+        <div id="api-result" class="result"></div>
+    </div>
+
+    <div class="section">
+        <h2>Webhook / JSON</h2>
+        <form id="webhook-form" class="stacked">
+            <label>Payload (JSON) <textarea name="payload" required placeholder='{ "event": "ping" }'></textarea></label>
+            <label>Collection <input name="collection" placeholder="default" required></label>
+            <label>Namespace <input name="namespace" placeholder="(opcional)"></label>
+            <label>Metadata (JSON) <textarea name="metadata" placeholder='{ "source": "webhook" }'></textarea></label>
+            <button type="submit">Guardar evento</button>
+        </form>
+        <div id="webhook-result" class="result"></div>
+    </div>
+
+    <div class="section">
+        <h2>Transcript VHS</h2>
+        <form id="vhs-form" class="stacked">
+            <label>Transcript <textarea name="transcript" required placeholder="Texto del vídeo"></textarea></label>
+            <label>Collection <input name="collection" placeholder="default" required></label>
+            <label>Namespace <input name="namespace" placeholder="(opcional)"></label>
+            <button type="submit">Indexar transcript</button>
+        </form>
+        <div id="vhs-result" class="result"></div>
+    </div>
 </div>
-<div class="section">
-    <h2>Query</h2>
-    <form id="query-form">
-        <label>Query <input name="query" required></label>
-        <label>Collection <input name="collection" value="default"></label>
-        <label>Namespace <input name="namespace"></label>
-        <label>Pipeline <input name="pipeline" placeholder="qa"></label>
-        <label><input type="checkbox" name="retrieval_only"> Retrieval only</label>
-        <button type="submit">Search</button>
-    </form>
-    <pre id="query-result"></pre>
+
+<div class="grid">
+    <div class="section">
+        <h2>Consultar</h2>
+        <form id="query-form" class="stacked">
+            <label>Query <input name="query" required></label>
+            <label>Collection <input name="collection" value="default"></label>
+            <label>Namespace <input name="namespace"></label>
+            <label>Pipeline <input name="pipeline" placeholder="qa"></label>
+            <label><input type="checkbox" name="retrieval_only"> Sólo retrieval</label>
+            <label><input type="checkbox" name="stream"> Streaming</label>
+            <label><input type="checkbox" name="structured"> Structured</label>
+            <label><input type="checkbox" name="partial"> Partial</label>
+            <button type="submit">Buscar</button>
+        </form>
+        <div class="result" id="query-result"></div>
+    </div>
+
+    <div class="section">
+        <h2>Pipelines disponibles</h2>
+        <div class="stacked">
+            <button id="refresh-pipelines" class="secondary" type="button">Actualizar lista</button>
+            <div id="pipelines" class="result"></div>
+        </div>
+    </div>
+
+    <div class="section">
+        <h2>Métricas básicas</h2>
+        <div class="stacked">
+            <button id="load-stats" class="secondary" type="button">Cargar /admin/stats</button>
+            <div id="stats" class="result"></div>
+        </div>
+    </div>
 </div>
 <script>
+const pretty = (data) => typeof data === 'string' ? data : JSON.stringify(data, null, 2);
+
+const handleJsonRequest = async (url, payload, target) => {
+    target.innerText = 'Trabajando...';
+    try {
+        const res = await fetch(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+        const text = await res.text();
+        target.innerText = res.ok ? pretty(JSON.parse(text || '{}')) : text;
+    } catch (err) {
+        target.innerText = `Error: ${err}`;
+    }
+};
+
 const uploadForm = document.getElementById('upload-form');
 uploadForm.addEventListener('submit', async (e) => {
     e.preventDefault();
     const formData = new FormData(uploadForm);
-    const res = await fetch('/ingest/file', {method: 'POST', body: formData});
-    document.getElementById('upload-result').innerText = await res.text();
+    const target = document.getElementById('upload-result');
+    target.innerText = 'Subiendo...';
+    try {
+        const res = await fetch('/ingest/file', { method: 'POST', body: formData });
+        const text = await res.text();
+        target.innerText = text;
+    } catch (err) {
+        target.innerText = `Error: ${err}`;
+    }
+});
+
+document.getElementById('url-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const target = document.getElementById('url-result');
+    const formData = new FormData(e.target);
+    const payload = {
+        url: formData.get('url'),
+        collection: formData.get('collection'),
+        namespace: formData.get('namespace') || null,
+        metadata: formData.get('metadata') ? JSON.parse(formData.get('metadata')) : {}
+    };
+    await handleJsonRequest('/ingest/url', payload, target);
+});
+
+document.getElementById('git-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const target = document.getElementById('git-result');
+    const formData = new FormData(e.target);
+    const payload = {
+        repo_url: formData.get('repo_url'),
+        branch: formData.get('branch') || null,
+        path: formData.get('path') || null,
+        collection: formData.get('collection'),
+        namespace: formData.get('namespace') || null,
+        metadata: formData.get('metadata') ? JSON.parse(formData.get('metadata')) : {}
+    };
+    await handleJsonRequest('/ingest/git', payload, target);
+});
+
+document.getElementById('api-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const target = document.getElementById('api-result');
+    const formData = new FormData(e.target);
+    const payload = {
+        endpoint: formData.get('endpoint'),
+        headers: formData.get('headers') ? JSON.parse(formData.get('headers')) : {},
+        collection: formData.get('collection'),
+        namespace: formData.get('namespace') || null,
+        metadata: formData.get('metadata') ? JSON.parse(formData.get('metadata')) : {}
+    };
+    await handleJsonRequest('/ingest/api', payload, target);
+});
+
+document.getElementById('webhook-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const target = document.getElementById('webhook-result');
+    const formData = new FormData(e.target);
+    const payload = {
+        payload: JSON.parse(formData.get('payload') || '{}'),
+        collection: formData.get('collection'),
+        namespace: formData.get('namespace') || null,
+        metadata: formData.get('metadata') ? JSON.parse(formData.get('metadata')) : {}
+    };
+    await handleJsonRequest('/ingest/webhook', payload, target);
+});
+
+document.getElementById('vhs-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const target = document.getElementById('vhs-result');
+    const formData = new FormData(e.target);
+    const formPayload = new FormData();
+    formPayload.append('transcript', formData.get('transcript'));
+    formPayload.append('collection', formData.get('collection'));
+    if (formData.get('namespace')) formPayload.append('namespace', formData.get('namespace'));
+    target.innerText = 'Enviando transcript...';
+    try {
+        const res = await fetch('/ingest/vhs', { method: 'POST', body: formPayload });
+        target.innerText = await res.text();
+    } catch (err) {
+        target.innerText = `Error: ${err}`;
+    }
 });
 
 const queryForm = document.getElementById('query-form');
 queryForm.addEventListener('submit', async (e) => {
     e.preventDefault();
+    const target = document.getElementById('query-result');
+    target.innerText = 'Buscando...';
     const formData = new FormData(queryForm);
     const payload = Object.fromEntries(formData.entries());
     payload.retrieval_only = formData.get('retrieval_only') === 'on';
-    const res = await fetch('/rag/query', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(payload)});
-    document.getElementById('query-result').innerText = await res.text();
+    payload.stream = formData.get('stream') === 'on';
+    payload.structured = formData.get('structured') === 'on';
+    payload.partial = formData.get('partial') === 'on';
+
+    try {
+        if (payload.stream) {
+            const res = await fetch('/rag/query', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+            if (!res.body) { target.innerText = await res.text(); return; }
+            const reader = res.body.getReader();
+            let answer = '';
+            const decoder = new TextDecoder();
+            while (true) {
+                const { done, value } = await reader.read();
+                if (done) break;
+                answer += decoder.decode(value);
+                target.innerText = answer;
+            }
+        } else {
+            const res = await fetch('/rag/query', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+            const text = await res.text();
+            target.innerText = text;
+        }
+    } catch (err) {
+        target.innerText = `Error: ${err}`;
+    }
+});
+
+const pipelinesDiv = document.getElementById('pipelines');
+document.getElementById('refresh-pipelines').addEventListener('click', async () => {
+    pipelinesDiv.innerText = 'Cargando...';
+    try {
+        const res = await fetch('/pipelines');
+        const data = await res.json();
+        pipelinesDiv.innerHTML = data.map(p => `<div><span class="pill">${p.name}</span>${p.description || ''}</div>`).join('\n');
+    } catch (err) {
+        pipelinesDiv.innerText = `Error: ${err}`;
+    }
+});
+
+document.getElementById('load-stats').addEventListener('click', async () => {
+    const target = document.getElementById('stats');
+    target.innerText = 'Cargando...';
+    try {
+        const res = await fetch('/admin/stats');
+        const data = await res.json();
+        target.innerText = pretty(data);
+    } catch (err) {
+        target.innerText = `Error: ${err}`;
+    }
 });
 </script>
 </body>
