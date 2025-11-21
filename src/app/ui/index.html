@@ -20,6 +20,9 @@
         .result { margin-top: 12px; background: #0f172a; color: #e2e8f0; padding: 12px; border-radius: 6px; white-space: pre-wrap; font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace; }
         .stacked > * + * { margin-top: 8px; }
         .pill { display: inline-block; padding: 2px 8px; border-radius: 9999px; background: #e0f2fe; color: #0369a1; font-size: 12px; font-weight: bold; margin-right: 8px; }
+        .collection-card { background: #0b1224; color: #e2e8f0; border: 1px solid #1f2937; border-radius: 6px; padding: 10px; margin-bottom: 10px; }
+        .collection-card h3 { margin: 0 0 4px 0; font-size: 16px; }
+        .muted { color: #94a3b8; font-size: 12px; }
     </style>
 </head>
 <body>
@@ -40,63 +43,13 @@
     </div>
 
     <div class="section">
-        <h2>Ingestar URL</h2>
-        <form id="url-form" class="stacked">
-            <label>URL <input name="url" required placeholder="https://..."></label>
-            <label>Collection <input name="collection" placeholder="default" required></label>
-            <label>Namespace <input name="namespace" placeholder="(opcional)"></label>
-            <label>Metadata (JSON) <textarea name="metadata" placeholder='{ "source": "blog" }'></textarea></label>
-            <button type="submit">Fetch & Ingest</button>
-        </form>
-        <div id="url-result" class="result"></div>
-    </div>
-
-    <div class="section">
-        <h2>Repositorio Git</h2>
-        <form id="git-form" class="stacked">
-            <label>Repo URL <input name="repo_url" required placeholder="https://github.com/..."></label>
-            <label>Branch <input name="branch" placeholder="main"></label>
-            <label>Subpath <input name="path" placeholder="src"></label>
-            <label>Collection <input name="collection" placeholder="default" required></label>
-            <label>Namespace <input name="namespace" placeholder="(opcional)"></label>
-            <label>Metadata (JSON) <textarea name="metadata" placeholder='{ "tag": "import" }'></textarea></label>
-            <button type="submit">Clonar e indexar</button>
-        </form>
-        <div id="git-result" class="result"></div>
-    </div>
-
-    <div class="section">
-        <h2>Endpoint API</h2>
-        <form id="api-form" class="stacked">
-            <label>Endpoint <input name="endpoint" required placeholder="https://api.example.com/data"></label>
-            <label>Headers (JSON) <textarea name="headers" placeholder='{ "Authorization": "Bearer ..." }'></textarea></label>
-            <label>Collection <input name="collection" placeholder="default" required></label>
-            <label>Namespace <input name="namespace" placeholder="(opcional)"></label>
-            <label>Metadata (JSON) <textarea name="metadata" placeholder='{ "source": "api" }'></textarea></label>
-            <button type="submit">Descargar e indexar</button>
-        </form>
-        <div id="api-result" class="result"></div>
-    </div>
-
-    <div class="section">
-        <h2>Webhook / JSON</h2>
-        <form id="webhook-form" class="stacked">
-            <label>Payload (JSON) <textarea name="payload" required placeholder='{ "event": "ping" }'></textarea></label>
-            <label>Collection <input name="collection" placeholder="default" required></label>
-            <label>Namespace <input name="namespace" placeholder="(opcional)"></label>
-            <label>Metadata (JSON) <textarea name="metadata" placeholder='{ "source": "webhook" }'></textarea></label>
-            <button type="submit">Guardar evento</button>
-        </form>
-        <div id="webhook-result" class="result"></div>
-    </div>
-
-    <div class="section">
-        <h2>Transcript VHS</h2>
+        <h2>Vídeo (VHS)</h2>
         <form id="vhs-form" class="stacked">
-            <label>Transcript <textarea name="transcript" required placeholder="Texto del vídeo"></textarea></label>
+            <label>Enlace al vídeo <input name="video_url" required placeholder="https://..." /></label>
             <label>Collection <input name="collection" placeholder="default" required></label>
             <label>Namespace <input name="namespace" placeholder="(opcional)"></label>
-            <button type="submit">Indexar transcript</button>
+            <label>Metadata <input name="metadata" placeholder="valor libre" ></label>
+            <button type="submit">Enviar a VHS e indexar</button>
         </form>
         <div id="vhs-result" class="result"></div>
     </div>
@@ -135,23 +88,26 @@
         </div>
     </div>
 </div>
+
+<div class="grid">
+    <div class="section">
+        <h2>Colecciones</h2>
+        <div class="stacked">
+            <label>Namespace <input id="collections-namespace" placeholder="(todos)"></label>
+            <button id="load-collections" class="secondary" type="button">Ver colecciones</button>
+            <div id="collections" class="result"></div>
+        </div>
+    </div>
+
+    <div class="section">
+        <h2>Documentos de la colección</h2>
+        <div class="stacked">
+            <div id="collection-docs" class="result"></div>
+        </div>
+    </div>
+</div>
 <script>
 const pretty = (data) => typeof data === 'string' ? data : JSON.stringify(data, null, 2);
-
-const handleJsonRequest = async (url, payload, target) => {
-    target.innerText = 'Trabajando...';
-    try {
-        const res = await fetch(url, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload)
-        });
-        const text = await res.text();
-        target.innerText = res.ok ? pretty(JSON.parse(text || '{}')) : text;
-    } catch (err) {
-        target.innerText = `Error: ${err}`;
-    }
-};
 
 const uploadForm = document.getElementById('upload-form');
 uploadForm.addEventListener('submit', async (e) => {
@@ -168,73 +124,20 @@ uploadForm.addEventListener('submit', async (e) => {
     }
 });
 
-document.getElementById('url-form').addEventListener('submit', async (e) => {
-    e.preventDefault();
-    const target = document.getElementById('url-result');
-    const formData = new FormData(e.target);
-    const payload = {
-        url: formData.get('url'),
-        collection: formData.get('collection'),
-        namespace: formData.get('namespace') || null,
-        metadata: formData.get('metadata') ? JSON.parse(formData.get('metadata')) : {}
-    };
-    await handleJsonRequest('/ingest/url', payload, target);
-});
-
-document.getElementById('git-form').addEventListener('submit', async (e) => {
-    e.preventDefault();
-    const target = document.getElementById('git-result');
-    const formData = new FormData(e.target);
-    const payload = {
-        repo_url: formData.get('repo_url'),
-        branch: formData.get('branch') || null,
-        path: formData.get('path') || null,
-        collection: formData.get('collection'),
-        namespace: formData.get('namespace') || null,
-        metadata: formData.get('metadata') ? JSON.parse(formData.get('metadata')) : {}
-    };
-    await handleJsonRequest('/ingest/git', payload, target);
-});
-
-document.getElementById('api-form').addEventListener('submit', async (e) => {
-    e.preventDefault();
-    const target = document.getElementById('api-result');
-    const formData = new FormData(e.target);
-    const payload = {
-        endpoint: formData.get('endpoint'),
-        headers: formData.get('headers') ? JSON.parse(formData.get('headers')) : {},
-        collection: formData.get('collection'),
-        namespace: formData.get('namespace') || null,
-        metadata: formData.get('metadata') ? JSON.parse(formData.get('metadata')) : {}
-    };
-    await handleJsonRequest('/ingest/api', payload, target);
-});
-
-document.getElementById('webhook-form').addEventListener('submit', async (e) => {
-    e.preventDefault();
-    const target = document.getElementById('webhook-result');
-    const formData = new FormData(e.target);
-    const payload = {
-        payload: JSON.parse(formData.get('payload') || '{}'),
-        collection: formData.get('collection'),
-        namespace: formData.get('namespace') || null,
-        metadata: formData.get('metadata') ? JSON.parse(formData.get('metadata')) : {}
-    };
-    await handleJsonRequest('/ingest/webhook', payload, target);
-});
-
 document.getElementById('vhs-form').addEventListener('submit', async (e) => {
     e.preventDefault();
     const target = document.getElementById('vhs-result');
     const formData = new FormData(e.target);
-    const formPayload = new FormData();
-    formPayload.append('transcript', formData.get('transcript'));
-    formPayload.append('collection', formData.get('collection'));
-    if (formData.get('namespace')) formPayload.append('namespace', formData.get('namespace'));
-    target.innerText = 'Enviando transcript...';
+    const payload = new FormData();
+    payload.append('video_url', formData.get('video_url'));
+    payload.append('collection', formData.get('collection'));
+    if (formData.get('metadata')) payload.append('metadata', formData.get('metadata'));
+    if (formData.get('namespace')) payload.append('namespace', formData.get('namespace'));
+    target.innerText = 'Mandando a VHS...';
     try {
-        const res = await fetch('/ingest/vhs', { method: 'POST', body: formPayload });
-        target.innerText = await res.text();
+        const res = await fetch('/ingest/vhs', { method: 'POST', body: payload });
+        const text = await res.text();
+        target.innerText = text;
     } catch (err) {
         target.innerText = `Error: ${err}`;
     }
@@ -296,6 +199,61 @@ document.getElementById('load-stats').addEventListener('click', async () => {
         target.innerText = pretty(data);
     } catch (err) {
         target.innerText = `Error: ${err}`;
+    }
+});
+
+const collectionsDiv = document.getElementById('collections');
+const collectionDocsDiv = document.getElementById('collection-docs');
+document.getElementById('load-collections').addEventListener('click', async () => {
+    collectionsDiv.innerText = 'Cargando colecciones...';
+    collectionDocsDiv.innerText = '';
+    const namespaceValue = document.getElementById('collections-namespace').value.trim();
+    const url = namespaceValue ? `/collections?namespace=${encodeURIComponent(namespaceValue)}` : '/collections';
+    try {
+        const res = await fetch(url);
+        const data = await res.json();
+        if (!Array.isArray(data) || data.length === 0) {
+            collectionsDiv.innerText = 'No hay colecciones.';
+            return;
+        }
+        collectionsDiv.innerHTML = data.map(c => `
+            <div class="collection-card">
+                <h3>${c.namespace} / ${c.collection}</h3>
+                <div><span class="pill">docs: ${c.documents}</span><span class="pill">chunks: ${c.chunks}</span></div>
+                <div class="muted">Idiomas: ${(c.languages || []).join(', ') || 'no detectado'}</div>
+                <div class="muted">Última ingesta: ${c.latest_ingested_at ? new Date(c.latest_ingested_at).toLocaleString() : 'N/A'}</div>
+                <button class="secondary view-docs" data-namespace="${c.namespace}" data-collection="${c.collection}">Ver documentos</button>
+            </div>
+        `).join('');
+    } catch (err) {
+        collectionsDiv.innerText = `Error: ${err}`;
+    }
+});
+
+collectionsDiv.addEventListener('click', async (event) => {
+    const btn = event.target.closest('.view-docs');
+    if (!btn) return;
+    const namespace = btn.getAttribute('data-namespace');
+    const collection = btn.getAttribute('data-collection');
+    collectionDocsDiv.innerText = 'Cargando documentos...';
+    try {
+        const res = await fetch(`/collections/${encodeURIComponent(namespace)}/${encodeURIComponent(collection)}`);
+        const docs = await res.json();
+        if (!Array.isArray(docs) || docs.length === 0) {
+            collectionDocsDiv.innerText = 'Colección vacía.';
+            return;
+        }
+        collectionDocsDiv.innerHTML = docs.map(d => `
+            <div class="collection-card">
+                <div><strong>v${d.version}</strong> · ${d.id}</div>
+                <div class="muted">${new Date(d.created_at).toLocaleString()} · ${d.language || 'idioma desconocido'}</div>
+                <div class="muted">Chunks: ${d.chunks}</div>
+                <div>${d.snippet || '(sin vista previa)'}</div>
+                <pre class="muted">${pretty(d.metadata)}</pre>
+            </div>
+        `).join('');
+    } catch (err) {
+        collectionDocsDiv.innerText = `Error: ${err}`;
     }
 });
 </script>

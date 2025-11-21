@@ -3,7 +3,7 @@ import time
 from pathlib import Path
 from typing import Dict, List
 
-from fastapi import Depends, FastAPI, File, Form, HTTPException, UploadFile
+from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.responses import HTMLResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
@@ -13,15 +13,12 @@ from .ingestion.pipelines import IngestionPipeline
 from .metrics import MetricsRecorder
 from .pipelines.dspy import PipelineRegistry
 from .schemas import (
-    APIIngestionRequest,
     ChatRequest,
-    GitIngestionRequest,
-    IngestionRequest,
+    CollectionSummary,
+    DocumentPreview,
     PipelineConfig,
     QueryRequest,
     ReplayRequest,
-    URLIngestionRequest,
-    WebhookEvent,
 )
 from .vectorstore.store import VectorStore
 
@@ -89,63 +86,23 @@ async def ingest_file(
     return {"document_id": doc.id, "version": doc.version}
 
 
-@app.post("/ingest/url")
-async def ingest_url(request: URLIngestionRequest):
-    doc = ingestion_pipeline.ingest_url(
-        url=request.url,
-        namespace=get_namespace(request.namespace),
-        collection=request.collection,
-        metadata=request.metadata,
-        chunk_size=request.chunk_size,
-        chunk_overlap=request.chunk_overlap,
-    )
-    return doc
-
-
-@app.post("/ingest/git")
-async def ingest_git(request: GitIngestionRequest):
-    docs = ingestion_pipeline.ingest_git(
-        repo_url=request.repo_url,
-        namespace=get_namespace(request.namespace),
-        collection=request.collection,
-        metadata=request.metadata,
-        branch=request.branch,
-        path=request.path,
-    )
-    return {"documents": [d.id for d in docs]}
-
-
-@app.post("/ingest/api")
-async def ingest_api(request: APIIngestionRequest):
-    doc = ingestion_pipeline.ingest_api(
-        endpoint=request.endpoint,
-        namespace=get_namespace(request.namespace),
-        collection=request.collection,
-        metadata=request.metadata,
-        headers=request.headers,
-    )
-    return doc
-
-
-@app.post("/ingest/webhook")
-async def ingest_webhook(request: WebhookEvent):
-    doc = ingestion_pipeline.ingest_webhook(
-        payload=request.payload,
-        namespace=get_namespace(request.namespace),
-        collection=request.collection,
-        metadata=request.metadata,
-    )
-    return doc
-
-
 @app.post("/ingest/vhs")
-async def ingest_vhs(transcript: str = Form(...), collection: str = Form(...), namespace: str | None = Form(None)):
-    doc = ingestion_pipeline.ingest_video_transcript(
-        transcript=transcript,
-        namespace=get_namespace(namespace),
-        collection=collection,
-        metadata={"source": "vhs"},
-    )
+async def ingest_vhs(
+    video_url: str = Form(...),
+    collection: str = Form(...),
+    namespace: str | None = Form(None),
+    metadata: str | None = Form(None),
+):
+    meta_dict = {} if not metadata else {"user": metadata}
+    try:
+        doc = ingestion_pipeline.ingest_video_link(
+            video_url=video_url,
+            namespace=get_namespace(namespace),
+            collection=collection,
+            metadata={"source": "vhs", **meta_dict},
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
     return doc
 
 
@@ -200,6 +157,17 @@ async def list_pipelines() -> List[PipelineConfig]:
 async def optimize_pipeline(name: str, feedback: Dict[str, str]):
     pipelines.optimize(name, feedback)
     return {"status": "optimized"}
+
+
+@app.get("/collections", response_model=List[CollectionSummary])
+async def list_collections(namespace: str | None = None):
+    namespace_filter = namespace or None
+    return [CollectionSummary(**summary) for summary in store.collections(namespace_filter)]
+
+
+@app.get("/collections/{namespace}/{collection}", response_model=List[DocumentPreview])
+async def get_collection_documents(namespace: str, collection: str):
+    return [DocumentPreview(**doc) for doc in store.collection_documents(namespace, collection)]
 
 
 @app.get("/admin/stats")

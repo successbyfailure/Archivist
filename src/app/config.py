@@ -17,6 +17,8 @@ class Settings(BaseSettings):
     openai_api_base: str = "https://api.openai.com/v1"
     openai_text_model: str = "gpt-4o-mini"
     enable_vhs: bool = True
+    vhs_endpoint: str | None = None
+    vhs_api_key: str | None = None
     metrics_window: int = 1000
 
 

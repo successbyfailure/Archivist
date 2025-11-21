@@ -51,6 +51,7 @@ class VectorStore:
         content: str,
         chunks: List[Chunk],
         metadata: Dict[str, str],
+        language: str | None = None,
     ) -> Document:
         key = self._namespace_key(namespace, collection)
         version = len(self.documents[key]) + 1
@@ -62,6 +63,7 @@ class VectorStore:
             content=content,
             chunks=chunks,
             metadata=metadata,
+            language=language,
         )
         self.documents[key].append(doc)
         for chunk in chunks:
@@ -131,6 +133,50 @@ class VectorStore:
             "vector_size": vector_size,
             "avg_chunk_length": float(avg_length),
         }
+
+    def collections(self, namespace: str | None = None) -> List[Dict[str, object]]:
+        summaries: List[Dict[str, object]] = []
+        for key, docs in self.documents.items():
+            ns, collection = key.split(":", 1)
+            if namespace and ns != namespace:
+                continue
+            chunk_count = sum(len(doc.chunks) for doc in docs)
+            languages = sorted(
+                {doc.language or doc.metadata.get("language") for doc in docs if doc.language or doc.metadata.get("language")}
+            )
+            latest = max(docs, key=lambda d: d.created_at) if docs else None
+            summaries.append(
+                {
+                    "namespace": ns,
+                    "collection": collection,
+                    "documents": len(docs),
+                    "chunks": chunk_count,
+                    "latest_version": latest.version if latest else 0,
+                    "languages": languages,
+                    "latest_ingested_at": latest.created_at if latest else None,
+                }
+            )
+        summaries.sort(key=lambda s: (s["namespace"], s["collection"]))
+        return summaries
+
+    def collection_documents(self, namespace: str, collection: str) -> List[Dict[str, object]]:
+        key = self._namespace_key(namespace, collection)
+        previews: List[Dict[str, object]] = []
+        for doc in self.documents.get(key, []):
+            snippet = " ".join(chunk.text for chunk in doc.chunks[:1])
+            previews.append(
+                {
+                    "id": doc.id,
+                    "version": doc.version,
+                    "metadata": doc.metadata,
+                    "created_at": doc.created_at,
+                    "chunks": len(doc.chunks),
+                    "snippet": snippet[:280],
+                    "language": doc.language or doc.metadata.get("language"),
+                }
+            )
+        previews.sort(key=lambda d: d["version"], reverse=True)
+        return previews
 
     def log_query(self, query: str, latency_ms: float, tokens: int, namespace: str, collection: str):
         self.metrics_window.append(
