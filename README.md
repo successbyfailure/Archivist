@@ -1,7 +1,6 @@
 # Archivist
 
-Archivist es un sistema de indexado de contenidos en bibliotecas para poder usarla con RAGs y LLMs.
-
+Archivist es un sistema de indexado de contenidos en bibliotecas para poder usarla con LLMs, sistemas rag, bots y automatizaciones.
 ## Development
 
 Install dependencies and run the API:
