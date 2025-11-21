@@ -23,4 +23,4 @@ docker compose build
 docker compose up -d
 ```
 
-Variables de entorno opcionales pueden declararse en un archivo `.env` en la raíz del proyecto. Los volúmenes `./data` y `./logs` se montan para persistir los índices y los registros. El servicio quedará accesible en `http://localhost:8000` con la documentación interactiva en `http://localhost:8000/docs` y el panel ligero en `http://localhost:8000/ui`.
+Variables de entorno opcionales pueden declararse en un archivo `.env` en la raíz del proyecto. El archivo `example.env` incluido ofrece valores predeterminados; puedes copiarlo a `.env` y ajustarlo según sea necesario. Los volúmenes `./data` y `./logs` se montan para persistir los índices y los registros. El servicio quedará accesible en `http://localhost:8000` con la documentación interactiva en `http://localhost:8000/docs` y el panel ligero en `http://localhost:8000/ui`.

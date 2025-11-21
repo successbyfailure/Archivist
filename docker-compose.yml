@@ -7,13 +7,8 @@ services:
     container_name: archivist
     ports:
       - "8000:8000"
-    environment:
-      - ARCHIVIST_DEFAULT_NAMESPACE=default
-      - ARCHIVIST_CHUNK_SIZE=800
-      - ARCHIVIST_CHUNK_OVERLAP=100
-      - ARCHIVIST_VECTOR_DIM=384
-      - ARCHIVIST_ENABLE_STREAMING=true
     env_file:
+      - example.env
       - .env
     volumes:
       - ./data:/data
