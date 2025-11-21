@@ -1,20 +1,22 @@
 #!/usr/bin/env python3
 """Synchronize .env with example.env defaults.
 
-If new variables are added to example.env, this script appends them to
-.env with their default values while preserving existing customizations.
+This script keeps `.env` aligned with the latest defaults in `example.env`.
+Existing variables keep their current values, while keys missing from `.env`
+are copied from `example.env` to keep the file up to date. Keys that only
+exist in `.env` are preserved under a "Custom variables" section.
 """
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Dict, List, Tuple
+from typing import Dict, List
 
 ROOT_DIR = Path(__file__).resolve().parent.parent
 EXAMPLE_ENV = ROOT_DIR / "example.env"
 ENV_FILE = ROOT_DIR / ".env"
 
 
-def read_env_file(path: Path) -> Tuple[Dict[str, str], List[str]]:
+def read_env_file(path: Path) -> tuple[Dict[str, str], List[str]]:
     variables: Dict[str, str] = {}
     lines: List[str] = []
 
@@ -43,20 +45,32 @@ def main() -> None:
         print("Created .env from example.env")
         return
 
-    new_entries = []
-    for key, default_value in example_vars.items():
-        if key not in env_vars:
-            new_entries.append(f"{key}={default_value}")
+    updated_lines: List[str] = []
 
-    if not new_entries:
-        print(".env already contains all variables from example.env")
-        return
+    for line in example_lines:
+        stripped = line.strip()
+        if not stripped or stripped.startswith("#") or "=" not in stripped:
+            updated_lines.append(line)
+            continue
 
-    updated_content = "\n".join(env_lines + ["", *new_entries]) + "\n"
-    ENV_FILE.write_text(updated_content)
-    print(f"Added {len(new_entries)} new variable(s) to .env:")
-    for entry in new_entries:
-        print(f"  {entry}")
+        key, example_value = line.split("=", 1)
+        current_value = env_vars.get(key)
+        value_to_write = current_value if current_value is not None else example_value
+        updated_lines.append(f"{key}={value_to_write}")
+
+    custom_entries = [key for key in env_vars if key not in example_vars]
+    if custom_entries:
+        updated_lines.extend(
+            [
+                "",
+                "# Custom variables preserved from existing .env",
+                *[f"{key}={env_vars[key]}" for key in custom_entries],
+            ]
+        )
+
+    ENV_FILE.write_text("\n".join(updated_lines) + "\n")
+
+    print("Synchronized .env to include any new variables from example.env")
 
 
 if __name__ == "__main__":

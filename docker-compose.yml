@@ -1,10 +1,22 @@
 services:
+  env_sync:
+    image: python:3.12-slim
+    container_name: archivist-env-sync
+    working_dir: /app
+    volumes:
+      - .:/app
+    command: ["python", "scripts/sync_env.py"]
+    restart: "no"
+
   archivist:
     image: ghcr.io/successbyfailure/archivist:latest
     build:
       context: .
       dockerfile: Dockerfile
     container_name: archivist
+    depends_on:
+      env_sync:
+        condition: service_completed_successfully
     labels:
       com.centurylinklabs.watchtower.enable: "true"
     ports:
