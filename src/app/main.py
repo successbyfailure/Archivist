@@ -57,6 +57,20 @@ def parse_optional_int(value: str | None, field: str) -> int | None:
         raise HTTPException(status_code=400, detail=f"{field} must be an integer") from exc
 
 
+def validate_chunk_params(
+    chunk_size: int | None, chunk_overlap: int | None, settings
+) -> tuple[int, int]:
+    size = chunk_size if chunk_size is not None else settings.chunk_size
+    overlap = chunk_overlap if chunk_overlap is not None else settings.chunk_overlap
+    if size <= 0:
+        raise HTTPException(status_code=400, detail="chunk_size must be greater than 0")
+    if overlap < 0:
+        raise HTTPException(status_code=400, detail="chunk_overlap cannot be negative")
+    if overlap >= size:
+        raise HTTPException(status_code=400, detail="chunk_overlap must be smaller than chunk_size")
+    return size, overlap
+
+
 @app.get("/", response_class=HTMLResponse)
 async def root():
     return (ui_path / "index.html").read_text()
@@ -72,9 +86,12 @@ async def ingest_file(
     file: UploadFile = File(...),
 ):
     meta_dict = {} if not metadata else {"user": metadata}
+    settings = get_settings()
     parsed_chunk_size = parse_optional_int(chunk_size, "chunk_size")
     parsed_chunk_overlap = parse_optional_int(chunk_overlap, "chunk_overlap")
-    settings = get_settings()
+    validated_chunk_size, validated_chunk_overlap = validate_chunk_params(
+        parsed_chunk_size, parsed_chunk_overlap, settings
+    )
     max_bytes = settings.max_upload_mb * 1024 * 1024
     content = await file.read(max_bytes + 1)
     if len(content) > max_bytes:
@@ -93,8 +110,8 @@ async def ingest_file(
             namespace=get_namespace(namespace),
             collection=collection,
             metadata=meta_dict,
-            chunk_size=parsed_chunk_size,
-            chunk_overlap=parsed_chunk_overlap,
+            chunk_size=validated_chunk_size,
+            chunk_overlap=validated_chunk_overlap,
         )
     except UnsupportedFile as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
